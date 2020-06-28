@@ -3,7 +3,7 @@ from .graph import Abstract_GraphCrawler
 class pyTorchCrawler(Abstract_GraphCrawler):
     """
     Custom grpah crawler from building graphs out of pyTorch models.
-    
+
     model: The model you want to visualize
     inputs: Example inputs to the model. Should of the right shape.
     optimizer: If a pyToch optimizer, will add optimizer information as graph attribute
@@ -11,16 +11,16 @@ class pyTorchCrawler(Abstract_GraphCrawler):
     ignore_empty_scopes: Ignore all the nodes with empty scopes. Simplifies the graph a lot, turn it off for special debugging purposes.
     onnx_translations: Replace the ONNX names for some layers by custom ones
     """
-    
+
     def __init__(self, model, inputs, optimizer=None, ignore_nodes=None, ignore_empty_scopes=False, ignore_params=True, onnx_translations={"Gemm": "Fully connected"}):
         import torch
         self.trace, out = torch.jit.get_trace_graph(model, inputs)
-        torch.onnx._optimize_trace(self.trace, torch.onnx.OperatorExportTypes.ONNX)
-        self.torch_graph = self.trace.graph()
+        self.torch_graph, out = torch.jit._get_trace_graph(model, inputs)
+        torch.onnx._optimize_trace(self.torch_graph, torch.onnx.OperatorExportTypes.ONNX)
         self.all_nodes = self.torch_graph.nodes()
 
         self.all_nodes = list( self.torch_graph.nodes() )
-        
+
         super(pyTorchCrawler, self).__init__(roots=self.all_nodes, parents_to_children=False)
         self.model = model
         self.optimizer = optimizer
@@ -57,7 +57,7 @@ class pyTorchCrawler(Abstract_GraphCrawler):
         if self.optimizer :
             res.update(self.get_optimizer_info())
         return res
-    
+
     def get_next(self, node) :
         """return the next node"""
         return [o.node() for o in node.inputs()]
@@ -73,7 +73,7 @@ class pyTorchCrawler(Abstract_GraphCrawler):
         if (self.ignore_empty_scopes and len(scopeName) == 0) or (self.ignore_params and self.get_node_type(node).lower() == "param") or (self._should_ignore(scopeName) ) :
             return None
         return scopeName + ">(" + "-".join([o.uniqueName() for o in node.outputs()]) + ")"
-    
+
     def get_node_type(self, node) :
         """return the type of the node"""
         base_name = node.kind()[6:]
@@ -84,7 +84,7 @@ class pyTorchCrawler(Abstract_GraphCrawler):
 
         if base_name.lower() == "pythonop":
             base_name = node.pyname()
-        
+
         return base_name
 
     def get_node_label(self, node):
@@ -113,14 +113,14 @@ class pyTorchCrawler(Abstract_GraphCrawler):
     def get_edge_parameters(self, e0, e1):
         """return edge svg, css, dagre-d3 parameters"""
         return {}
-    
+
     def get_node_attributes(self, node):
         """return node custom attributes"""
         ret = {k: node[k] for k in node.attributeNames()}
         ret["path"] = "<p>" + node.scopeName().replace("/", "<br>") + "</p>"
         ret["shape"] = self.get_node_shape(node)
         return ret
-    
+
     def get_edge_attributes(self, e0, e1):
         """return edge custom attributes"""
         return {}
